@@ -150,6 +150,7 @@ run_stage <- function(pmwgs,
     })
 
     ll <- unlist(lapply(tmp, attr, "ll"))
+    extra <- lapply(tmp, attr, "extra_info")
     alpha <- array(unlist(tmp), dim = dim(pars$alpha))
 
     # Store results locally.
@@ -161,6 +162,7 @@ run_stage <- function(pmwgs,
     pmwgs$samples$idx <- j
     pmwgs$samples$subj_ll[, j] <- ll
     pmwgs$samples$a_half[, j] <- pars$a_half
+    pmwgs$samples$extra_info[, j] <- extra
 
     if (stage == "adapt") {
       res <- test_sampler_adapted(pmwgs, n_unique, i)
@@ -261,12 +263,17 @@ new_sample <- function(s, data, num_particles, parameters,
   proposals[1, ] <- subj_mu
 
   # Density of data given random effects proposal.
-  lw <- apply(
+  # Do not simplify (as we will lose any attributes on the returned objects,
+  lw_as_list <- apply(
     proposals,
     1,
     likelihood_func,
-    data = data[data$subject == subjects[s], ]
+    data = data[data$subject == subjects[s], ],
+    simplify = FALSE
   )
+  # but simplify after the fact
+  lw <- unlist(lw_as_list)
+
   # Density of random effects proposal given population-level distribution.
   lp <- mvtnorm::dmvnorm(x = proposals, mean = mu, sigma = sig2, log = TRUE)
   # Density of proposals given proposal distribution.
@@ -295,6 +302,9 @@ new_sample <- function(s, data, num_particles, parameters,
   idx <- sample(x = num_particles, size = 1, prob = weights)
   winner <- proposals[idx, ]
   attr(winner, "ll") <- lw[idx]
+  extra <- attr(lw_as_list[[idx]], "extra_info")
+  if (is.null(extra)) extra <- NA
+  attr(winner, "extra_info") <- extra
   winner
 }
 
